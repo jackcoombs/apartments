@@ -4,7 +4,6 @@ import numpy as np
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 import re
 from google.cloud import bigquery
@@ -17,7 +16,7 @@ def get_soup(url):
     chrome_options = Options()
     #chrome_options.add_argument("--headless") #gets the javascript without opening the browser
 
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()),options=chrome_options)
+    driver = webdriver.Chrome(service=Service(config.chromedriver),options=chrome_options)
     driver.get(url)
 
     #scroll to bottom
@@ -47,7 +46,7 @@ def get_soup(url):
 
     return soup
 
-def get_info(soup):
+def get_info(soup,num):
 
     listings = soup.find_all('li',class_='mortar-wrapper')
 
@@ -139,49 +138,57 @@ def write_to_big_query(df,dataset,table):
                                                 job_config=job_config)
     return print(f"{table} created with " + str(len(df)) + " rows"), job.result()
 
+def create_dataframe(main_url, url_params):
 ## loop through the page numbers, extract the data, and create dataframe ##
 
-df = pd.DataFrame()
-num = 1
-main_url = 'https://www.apartments.com/chicago-il/'
-url_params = '?bb=tut6lj08yJ_klggsD'
+    df = pd.DataFrame()
+    num = 1
 
-#set initial url
-url = main_url + url_params
-soup = get_soup(url)
-info = get_info(soup)
-df = pd.concat([df,info],axis=0)
-print('page 1 extracted')
-num = num + 1
-
-#find the max page number from the bottom of the main_url
-page_number = extract_page_number(soup.find('span',class_='pageRange').text.strip()) + 1
-
-#loop through rest of pages using page number
-while num < page_number:
-    url = main_url + str(num) + '/' + url_params
+    #set initial url
+    url = main_url + url_params
     soup = get_soup(url)
-    info = get_info(soup)
+    info = get_info(soup,num)
     df = pd.concat([df,info],axis=0)
-    print(f'page {num} extracted') #keep track of progress
+    print('page 1 extracted')
     num = num + 1
 
-## Clean Data ##
+    #find the max page number from the bottom of the main_url
+    page_number = extract_page_number(soup.find('span',class_='pageRange').text.strip()) + 1
 
-df['price'] = df['price'].str.replace('$','').str.replace(',','')
+    #loop through rest of pages using page number
+    while num < page_number:
+        url = main_url + str(num) + '/' + url_params
+        soup = get_soup(url)
+        info = get_info(soup,num)
+        df = pd.concat([df,info],axis=0)
+        print(f'page {num} extracted') #keep track of progress
+        num = num + 1
 
-#Apply the extract_and_split function to the 'price' column
-df['price_low'], df['price_high'] = zip(*df['price'].apply(extract_and_split))
+    ## Clean Data ##
 
-#create a flag column if the price returns 'Call for Rent'
-df['call_for_rent'] = df['price_high'].apply(lambda x: 'y' if 'Call for Rent' in x else '')
+    df['price'] = df['price'].str.replace('$','').str.replace(',','')
 
-df['price_low'] = df['price_low'].astype(int)
-df['price_high'] = df['price_high'].str.replace("Call for Rent", '0').astype(int) #replace call for rent with 0
+    #Apply the extract_and_split function to the 'price' column
+    df['price_low'], df['price_high'] = zip(*df['price'].apply(extract_and_split))
 
-df['beds'] = df['info'].str.extract('([0-9]+) Bed').fillna(0).astype(int)
-df['bathrooms'] = df['info'].str.extract('([0-9]+) Bath').fillna(0).astype(int)
-df['sq_ft'] = df['info'].str.extract('([0-9]+) sq ft').fillna(0).astype(int)
+    #create a flag column if the price returns 'Call for Rent'
+    df['call_for_rent'] = df['price_high'].apply(lambda x: 'y' if 'Call for Rent' in x else '')
+
+    df['price_low'] = df['price_low'].astype(int)
+    df['price_high'] = df['price_high'].str.replace("Call for Rent", '0').astype(int) #replace call for rent with 0
+
+    df['beds'] = df['info'].str.extract('([0-9]+) Bed').fillna(0).astype(int)
+    df['bathrooms'] = df['info'].str.extract('([0-9]+) Bath').fillna(0).astype(int)
+    df['sq_ft'] = df['info'].str.extract('([0-9]+) sq ft').fillna(0).astype(int)
+    df['zip_code'] = df['address'].str.extract('IL ([0-9]+)').fillna(0).astype(int)
+
+    return df
+
+#run once for north side and south side to maximize listings returned
+north = create_dataframe(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=tut6lj08yJ_klggsD')
+south = create_dataframe(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=3u0uls72yJqxxpqvN')
+
+df = pd.concat([north,south],axis=0)
 
 print(df.head())
 write_to_big_query(df,'apartments','chicago')
