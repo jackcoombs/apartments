@@ -11,13 +11,9 @@ from google.oauth2 import service_account
 import config
 from datetime import date
 
-def get_soup(url):
+def get_soup(url,driver):
 
-    chrome_options = Options()
-    #chrome_options.add_argument("--headless") #gets the javascript without opening the browser
-
-    driver = webdriver.Chrome(service=Service(config.chromedriver),options=chrome_options)
-    driver.get(url)
+    driver.get(url) #open webpage
 
     #scroll to bottom
     SCROLL_PAUSE_TIME = 0.5
@@ -42,17 +38,17 @@ def get_soup(url):
     html = driver.page_source
     soup = BeautifulSoup(html,'html.parser')
 
-    driver.close()
-
     return soup
 
-def get_info(soup,num):
+def get_listings(soup,num,city_side):
 
     listings = soup.find_all('li',class_='mortar-wrapper')
 
     apartments = []
 
-    #loop through listings, trying several elements where needed. extract needed data
+    #start number to assign listings ids
+    id = 0
+
     for i in listings:
         try:
             address = i.find('div',class_='property-address js-url').text.strip()
@@ -63,18 +59,7 @@ def get_info(soup,num):
                 try:
                     address = i.find('span',class_='js-placardTitle title').text.strip()
                 except:
-                    address = i.find('div',class_='property-title js-placardTitle').text.strip() 
-        try:
-            price = i.find('p',class_='property-pricing').text.strip()
-        except:
-            try:
-                price = i.find('div',class_='price-range').text.strip()
-            except:
-                price = i.find('p',class_='property-rents').text.strip()
-        try:
-            info = i.find('p',class_='property-beds').text.strip()
-        except:
-            info = i.find('div',class_='bed-range').text.strip()
+                    address = i.find('div',class_='property-title js-placardTitle').text.strip()
         try:
             link = i.find('a',class_='property-link').get('href')
         except:
@@ -84,15 +69,59 @@ def get_info(soup,num):
         data = {
             'date':date.today(),
             'address':address,
-            'price':price,
-            'info':info,
             'link':link,
-            'page_num':num
+            'page_num':num,
+            'id':city_side + '-' + str(num) + str(id), #include city side for north and south jobs
+
         }
         apartments.append(data)
-        
+
+        id = id + 1
+
     #create dataframe from list of dictionaries
     df = pd.DataFrame(apartments)
+
+    return df
+
+
+def get_listing_info(soup,id):
+    ## create df of key, value pairs with each id ##
+
+    info = []
+
+    #main info under listing photos
+    main_info = soup.find_all('div','priceBedRangeInfoInnerContainer')
+    for i in main_info:
+        label = i.find('p','rentInfoLabel').text.strip()
+        detail = i.find('p','rentInfoDetail').text.strip()
+        data = {
+            'id':id,
+            'label':label,
+            'detail':detail
+        }
+        info.append(data)
+    
+    #scorecards near bottom of page
+    scores = soup.find('div',id='transportationScoreCard').find_all('div','component-frame')
+    for i in scores:
+        try:
+            label = i.find('div','title scoreDescription').text.strip()
+            detail = i.find('div','score').text.strip()
+            data = {
+                'id':id,
+                'label':label,
+                'detail':detail
+            }
+            info.append(data)
+        except:
+            continue #unable to get noise level. ignore it by continuing
+    
+    #neighborhood at top of page
+    nbhd = {'id':id,'label':'Neighborhood','detail':soup.find('a','neighborhood').text.strip()}
+    info.append(nbhd)
+
+    df = pd.DataFrame(info)
+    df = df.loc[df['label']!='None']
 
     return df
 
@@ -109,20 +138,6 @@ def extract_page_number(page_string):
     else:
         return None
     
-def extract_and_split(text):
-    # Split the text using the hyphen as the delimiter
-    numbers = text.split("-")
-    
-    # Extract the two numbers
-    if len(numbers) == 2:
-        num1 = numbers[0].strip()  # Remove leading/trailing whitespaces
-        num2 = numbers[1].strip()  # Remove leading/trailing whitespaces
-    else:
-        num1 = 0
-        num2 = numbers[0]
-    
-    return num1, num2
-
 def write_to_big_query(df,dataset,table):
     credentials = service_account.Credentials.from_service_account_file(config.credentials)
 
@@ -138,57 +153,52 @@ def write_to_big_query(df,dataset,table):
                                                 job_config=job_config)
     return print(f"{table} created with " + str(len(df)) + " rows"), job.result()
 
-def create_dataframe(main_url, url_params):
-## loop through the page numbers, extract the data, and create dataframe ##
+def create_dataframes(main_url, url_params, city_side):
+    ## loop through the page numbers, extract the data, and create dataframe ##
 
-    df = pd.DataFrame()
+    listings = pd.DataFrame()
     num = 1
+    chrome_options = Options()
+    #chrome_options.add_argument("--headless") #gets the javascript without opening the browser
+    driver = webdriver.Chrome(service=Service(config.chromedriver),options=chrome_options)
 
-    #set initial url
+    ## Get all of the listings in one dataframe ##
     url = main_url + url_params
-    soup = get_soup(url)
-    info = get_info(soup,num)
-    df = pd.concat([df,info],axis=0)
-    print('page 1 extracted')
+    soup = get_soup(url,driver)
+    info = get_listings(soup,num,city_side)
+    listings = pd.concat([listings,info],axis=0)
     num = num + 1
 
-    #find the max page number from the bottom of the main_url
     page_number = extract_page_number(soup.find('span',class_='pageRange').text.strip()) + 1
 
-    #loop through rest of pages using page number
     while num < page_number:
         url = main_url + str(num) + '/' + url_params
-        soup = get_soup(url)
-        info = get_info(soup,num)
-        df = pd.concat([df,info],axis=0)
-        print(f'page {num} extracted') #keep track of progress
+        soup = get_soup(url,driver)
+        info = get_listings(soup,num,city_side)
+        listings = pd.concat([listings,info],axis=0)
         num = num + 1
 
-    ## Clean Data ##
+    ## Open each listing and extract info ##
+    listing_info = pd.DataFrame()
 
-    df['price'] = df['price'].str.replace('$','').str.replace(',','')
+    for link,id in zip(listings['link'],listings['id']):
+        soup = get_soup(link,driver)
+        info = get_listing_info(soup,id)
+        listing_info = pd.concat([listing_info,info],axis=0)
 
-    #Apply the extract_and_split function to the 'price' column
-    df['price_low'], df['price_high'] = zip(*df['price'].apply(extract_and_split))
 
-    #create a flag column if the price returns 'Call for Rent'
-    df['call_for_rent'] = df['price_high'].apply(lambda x: 'y' if 'Call for Rent' in x else '')
+    driver.close()
 
-    df['price_low'] = df['price_low'].astype(int)
-    df['price_high'] = df['price_high'].str.replace("Call for Rent", '0').astype(int) #replace call for rent with 0
-
-    df['beds'] = df['info'].str.extract('([0-9]+) Bed').fillna(0).astype(int)
-    df['bathrooms'] = df['info'].str.extract('([0-9]+) Bath').fillna(0).astype(int)
-    df['sq_ft'] = df['info'].str.extract('([0-9]+) sq ft').fillna(0).astype(int)
-    df['zip_code'] = df['address'].str.extract('IL ([0-9]+)').fillna(0).astype(int)
-
-    return df
+    #return two dfs, the listings and info
+    return listings,listing_info
 
 #run once for north side and south side to maximize listings returned
-north = create_dataframe(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=tut6lj08yJ_klggsD')
-south = create_dataframe(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=3u0uls72yJqxxpqvN')
+north_listings, north_listing_info = create_dataframes(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=tut6lj08yJ_klggsD', city_side='north')
+south_listings, south_listing_info = create_dataframes(main_url='https://www.apartments.com/chicago-il/',url_params='?bb=3u0uls72yJqxxpqvN', city_side='south')
 
-df = pd.concat([north,south],axis=0)
+#join north and south into two dfs
+listings = pd.concat([north_listings,south_listings],axis=0)
+listing_info = pd.concat([north_listing_info,south_listing_info],axis=0)
 
-print(df.head())
-write_to_big_query(df,'apartments','chicago')
+write_to_big_query(listings,'apartments','chicago_listings')
+write_to_big_query(listing_info,'apartments','chicago_listing_info')
