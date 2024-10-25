@@ -42,7 +42,25 @@ A sql query is used to bring together data from the tables so each row is one li
 
 This dashboard in Looker Studio looks at all the scraped listings, and shows the results based on the filters: https://lookerstudio.google.com/reporting/c21e28f4-b9f1-4e9e-a101-e06b9a4da893
 
+## Analysis and Modeling
+
+`analysis.ipynb` contains exploratory data analysis and builds a predictive model for monthly rent. A function to predict rent based on inputs is included at the end.
+
+Main analysis points
+1. The collected data is statistically significant in predicting monthly rent
+2. Square footage and transit availability have the highest impact on monthly rent, though all variables carry some importance
+3. The model explains 68% of the data's variance (R2 = .68), and can be used to predict monthly rent
+
+<p align="center">
+  <img src="images/model_features.png" alt="model_features" width="500"/>
+</p>
+
+<p align="center">
+  <img src="images/wicker_park_prediction.png" alt="wicker_park_prediction" width="500"/>
+</p>
+
 ## Future Improvements
 
 1. Running the ETL on an automated basis so the data stays up to date
 2. Scraping more granular sections of the city on Apartments.com to maximize the amount of results
+3. Gathering more data points to improve model accuracy
