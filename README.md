@@ -2,7 +2,7 @@
 
 ## Overview
 
-Common questions when apartment hunting are "How much should I expect to pay?", "What's the average rent for this area?", or "How much space can I afford?". This project aims to help renters in the Chicago area answer those questions by providing a simple dashboard that can filtered by neighborhood, # beds, # bathrooms, and square footage.
+Common questions when apartment hunting are "How much should I expect to pay?", "What's the average rent for this area?", or "How much space can I afford?". This project aims to help renters in the Chicago area answer those questions by providing a simple dashboard that can filtered by neighborhood, # beds, # bathrooms, and square footage. Also, analysis is included on what factors primarily drive rent higher.
 
 ## Features
 This project does the following:
@@ -10,6 +10,7 @@ This project does the following:
 1. Scrapes Chicago apartment data from Apartments.com
 2. Transforms and writes the data to BigQuery
 3. Powers a dashboard in Looker Studio
+4. Models the relationship between the extracted data and monthly rent, and creates a predictive model
 
 ## Extract
 
@@ -52,11 +53,11 @@ Main analysis points
 3. The model explains 68% of the data's variance (R2 = .68), and can be used to predict monthly rent
 
 <p align="center">
-  <img src="images/model_features.png" alt="model_features" width="500"/>
+  <img src="images/model_features.png" alt="model_features" width="300"/>
 </p>
 
 <p align="center">
-  <img src="images/wicker_park_prediction.png" alt="wicker_park_prediction" width="500"/>
+  <img src="images/wicker_park_prediction.png" alt="wicker_park_prediction" width="300"/>
 </p>
 
 ## Future Improvements
