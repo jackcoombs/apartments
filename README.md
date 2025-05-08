@@ -43,7 +43,7 @@ A sql query is used to bring together data from the tables so each row is one li
 
 This dashboard in Looker Studio looks at all the scraped listings, and shows the results based on the filters: https://lookerstudio.google.com/reporting/c21e28f4-b9f1-4e9e-a101-e06b9a4da893
 
-Additionally, here are two Tablau visualizations:
+Additionally, here are two Tableau visualizations:
 
 Monthly Rent Heat Map: https://public.tableau.com/views/apartmentsmap/ChicagoApartments?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link
 
