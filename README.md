@@ -43,6 +43,10 @@ A sql query is used to bring together data from the tables so each row is one li
 
 This dashboard in Looker Studio looks at all the scraped listings, and shows the results based on the filters: https://lookerstudio.google.com/reporting/c21e28f4-b9f1-4e9e-a101-e06b9a4da893
 
+Additionally, here are two Tablau visualizations:
+Monthly Rent Heat Map: https://public.tableau.com/views/apartmentsmap/ChicagoApartments?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link
+Neighborhood Clusters: https://public.tableau.com/views/ChicagoApartments/Clusters?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link
+
 ## Analysis and Modeling
 
 `analysis.ipynb` contains exploratory data analysis and builds a predictive model for monthly rent. A function to predict rent based on inputs is included at the end.
